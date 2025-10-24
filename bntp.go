@@ -420,13 +420,33 @@ func UTCStamp() int64 {
 		return nowMs
 	}
 
+	return nowMs + GetTimeOffset()
+}
+
+func Now() time.Time {
+	now := time.Now()
+
+	if LangCode == LangNone {
+		return now
+	}
+
+	offset := GetTimeOffset()
+	return now.Add(time.Duration(offset) * time.Millisecond)
+}
+
+// GetTimeOffset get time offset in milliseconds(>0 means local < standard)
+func GetTimeOffset() int64 {
+	if LangCode == LangNone {
+		return 0
+	}
 	// 快速路径: 检查缓存是否有效
 	lastUpdate := lastUpdateTimeMs.Load()
 	cacheDuration := atomic.LoadInt64(&cacheValidDurationMs)
 
 	// 如果缓存有效，直接返回结果
+	nowMs := time.Now().UnixMilli()
 	if lastUpdate > 0 && nowMs-lastUpdate < cacheDuration {
-		return nowMs + cachedOffset.Load()
+		return cachedOffset.Load()
 	}
 
 	// 缓存无效，尝试使用同步器的值
@@ -439,20 +459,5 @@ func UTCStamp() int64 {
 	cachedOffset.Store(offset)
 	lastUpdateTimeMs.Store(nowMs)
 
-	return nowMs + offset
-}
-
-func Now() time.Time {
-	correctedTime := UTCStamp()
-	return time.Unix(0, correctedTime*int64(time.Millisecond))
-}
-
-// GetTimeOffset get time offset in milliseconds(>0 means local < standard)
-func GetTimeOffset() int64 {
-	if LangCode == LangNone {
-		return 0
-	}
-	ts := GetTimeSync()
-
-	return ts.atomicOffset.Load()
+	return offset
 }
